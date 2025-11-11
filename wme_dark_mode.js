@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Dark Mode
 // @namespace    https://greasyfork.org/en/users/1434751-poland-fun
-// @version      1.07
+// @version      1.08
 // @description  Enable dark mode in WME.
 // @author       poland_fun
 // @contributor	 kid4rm90s and luan_tavares_127
@@ -126,6 +126,9 @@ Version
         - Closure panel post WME update
 1.07 - Fixed -
         - History fetching error background
+1.08 - Fixed -
+        - Hover on segment restriction table
+        - Waze Edit Count Session History
 
 */
 
@@ -138,7 +141,7 @@ Version
 (function main() {
 	"use strict";
 
-	const updateMessage  = 'Fixed -<br>- History fetching error background';
+	const updateMessage  = 'Fixed -<br>- Hover on segment restriction table<br>- Waze Edit Count Session History';
 	const scriptName     = GM_info.script.name;
 	const scriptVersion  = GM_info.script.version;
 	const downloadUrl    = 'https://greasyfork.org/scripts/526924-wme-dark-mode/code/WME%20Dark%20Mode.user.js';
@@ -668,6 +671,10 @@ Version
 				background: var(--always_dark_inactive) !important;
 			}
 
+			[wz-theme="dark"] .restrictions-summary .restriction-list-item:hover td {
+				background: var(--always_dark_inactive) !important;
+			}
+
 			/* Turn Instructions */
 			[wz-theme="dark"] .turn-instructions-panel .exit-signs,
 			[wz-theme="dark"] .turn-instructions-panel .turn-instructions,
@@ -1157,6 +1164,60 @@ Version
 			[wz-theme="dark"] .secondary-toolbar .toolbar-button {
 				background-color: var(--background_default) !important;
 			}
+/* Container + table base */
+[wz-theme="dark"] #wecm-time-history-table {
+  background: var(--always_dark_background_default);
+  border: 1px solid var(--always_dark_inactive) !important;
+}
+[wz-theme="dark"] #wecm-time-history-table table {
+  background: var(--always_dark_background_default);
+  color: white;
+  border-collapse: collapse;
+}
+
+/* Header (bar + cells) */
+[wz-theme="dark"] #wecm-time-history-table thead {
+  background: var(--always_dark_inactive) !important;
+  color: white !important;
+  border-bottom: 1px solid var(--always_dark_inactive) !important;
+}
+[wz-theme="dark"] #wecm-time-history-table th,
+[wz-theme="dark"] #wecm-time-history-table td {
+  border-bottom: 1px solid var(--always_dark_inactive) !important;
+  color: white !important;
+}
+
+/* Body rows (base, zebra, hover) */
+[wz-theme="dark"] #wecm-time-history-table tbody tr {
+  background: var(--always_dark_background_default) !important;
+}
+[wz-theme="dark"] #wecm-time-history-table tbody tr:nth-child(odd) {
+  background: var(--always_dark_surface_default) !important;
+}
+[wz-theme="dark"] #wecm-time-history-table tbody tr:hover > td,
+[wz-theme="dark"] #wecm-time-history-table tbody tr:hover > th {
+  background: var(--always_dark_inactive) !important;
+  cursor: pointer;
+}
+
+/* Delete button (normal + hover) */
+[wz-theme="dark"] #wecm-time-history-table .wecm-delete-session-btn {
+  color: white !important;
+  border: 1px solid var(--always_dark_surface_default) !important;
+  transition: background 0.2s ease;
+}
+
+[wz-theme="dark"] .wecm-total-summary {
+  background: var(--always_dark_surface_default) !important;
+  color: white !important;
+  border: 1px solid var(--always_dark_inactive) !important;
+  box-shadow: 0 1px 3px rgba(255, 255, 255, 0.1) !important;
+}
+
+[wz-theme="dark"] #wecm-save-time-btn,
+[wz-theme="dark"] #wecm-clear-history-btn {
+  color: white !important;
+}
 
 			[wz-theme="dark"] #wecm-count {
 				color: var(--content_p1) !important;
@@ -1836,4 +1897,3 @@ Version
 
 	console.log(`${scriptName} initialized.`);
 })();
-

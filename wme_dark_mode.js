@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Dark Mode
 // @namespace    https://greasyfork.org/en/users/1434751-poland-fun
-// @version      1.10
+// @version      1.12.1
 // @description  Enable dark mode in WME.
 // @author       poland_fun
 // @contributor	 kid4rm90s and luan_tavares_127
@@ -137,7 +137,27 @@ Version
 		- Fixed for WME Bookmarks
 		- Fixed for UR Colors
 		- Other bug fixes and memory leaks improvements
-
+1.11 - Fixed - 
+		- Fixed for place opening hours delete icon showing incorrect color
+1.11.1 - Fixed - 
+		- Added support for WME AD to BS Calendar pop-up
+1.11.5 - Fixed - 
+		- Fixed for WME PIE script compatibility
+		- Fixed for WME AD to BS Calendar pop-up (forgot to add some CSS in 1.11.1)
+		1.11.6 - Fixed - 
+		- Fixed for WME PIE script compatibility for pie resize and rotate buttons
+1.11.7 - Fixed -
+		- Fixed for E50 Geometry Information Script dark mode compatibility
+		- Added support for E85 Street Geometry Script
+		- Added support for E95 Script
+1.11.8 - Fixed -
+		- Added WME Easy Storage Manager dark theme support
+1.11.9 - Fixed -
+		- Now the EV charger icons will have a filter applied to them in dark mode to make them more visible.
+1.12.0 - Fixed -
+		- Added Theme toggle below Settings icon
+1.12.1 - Fixed -
+		- Fixed for Lane Tools delete lane buttons not being visible in dark mode
 */
 
 /* global W */
@@ -148,31 +168,26 @@ Version
 
 (function main() {
   ('use strict');
-
-  const updateMessage =
-    '<strong>Fixed :</strong><br> - Fixed for visual + towards instruction icons in turn instructions panel<br>- Fixed for URC-E comment box close button color <br>- Fixed for WME Bookmarks<br>- Fixed for UR Colors<br>- Other bug fixes and memory leaks improvements <br>';
+	const updateMessage = '<strong>Fixed :</strong><br> - Fixed for Lane Tools delete lane buttons not being visible in dark mode <br>';
   const scriptName = GM_info.script.name;
   const scriptVersion = GM_info.script.version;
   const downloadUrl = 'https://greasyfork.org/scripts/526924-wme-dark-mode/code/WME%20Dark%20Mode.user.js';
   let profileTries = 0;
-  let settingsTries = 0;
   // Currently it is 60 retries (seconds) since we can only add this after a user is
   // logged in. Change this in the future to be smarter. The quick check is lightweight
   // so it should not bog anything down.
   let maxUIRetries = 60;
 
-  var lightButton;
-  var darkButton;
-  var autoButton;
+  let navbarThemeTries = 0;
+  let navbarThemeTimeoutId = null;
+  let navbarThemeButton = null;
 
   var darkModeSwitch;
 
   // Store references for cleanup
   let mainObserver = null;
   let chipObserver = null;
-  let settingsObserver = null;
   let profileTimeoutId = null;
-  let settingsTimeoutId = null;
   const themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   const themeAbortController = new AbortController();
   let styleInjected = false;
@@ -182,19 +197,8 @@ Version
     const theme = getPreferredTheme();
     let currAuto = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Dark' : 'Light';
 
-    // Let's make sure that the buttons were made.
-    // Since they are made together, we just check that
-    // one is not null
-    if (lightButton) {
-      lightButton.value = theme == 'light' ? 'true' : 'false';
-      darkButton.value = theme == 'dark' ? 'true' : 'false';
-      autoButton.value = theme == 'auto' ? 'true' : 'false';
-
-      lightButton.color = theme == 'light' ? 'primary' : 'secondary';
-      darkButton.color = theme == 'dark' ? 'primary' : 'secondary';
-      autoButton.color = theme == 'auto' ? 'primary' : 'secondary';
-
-      autoButton.textContent = `Auto (${currAuto})`;
+    if (navbarThemeButton) {
+      navbarThemeButton.textContent = theme !== 'light' ? 'Light' : 'Dark';
     }
 
     if (darkModeSwitch) {
@@ -246,22 +250,20 @@ Version
     if (!discussRegex.test(window.location.href)) {
       updateUI();
       setTheme();
+      scheduleEVChargerFilter();
     }
   });
 
   // Detect changes in the system theme.
   // We always need to update the UI to change the text in ()s - Auto Mode ([mode])
   // Calling setTheme even if there is no need to change is fine
-  themeMediaQuery.addEventListener(
-    'change',
-    (event) => {
+  themeMediaQuery.addEventListener('change', (event) => {
       if (!discussRegex.test(window.location.href)) {
         updateUI();
         setTheme();
+      scheduleEVChargerFilter();
       }
-    },
-    { signal: themeAbortController.signal }
-  );
+  }, { signal: themeAbortController.signal });
 
   const discussCSSModifications = `
         /*********** WME Wazebar ***********************************************/
@@ -604,6 +606,11 @@ Version
                 filter: invert(1);
             }
 
+			[wz-theme="dark"] #li-del-rev-btn,
+			[wz-theme="dark"] #li-del-fwd-btn {
+                background-color: var(--always_dark_surface_default) !important;
+            }
+
             /************************* WME Nav History **********************************************************/
             [wz-theme="dark"] .nav-history-container {
                 background-color: var(--background_default) !important;
@@ -797,6 +804,7 @@ Version
 			[wz-theme="dark"] #zoomOutLink3 {
 				color: var(--content_p1) !important;
 			}
+
 			[wz-theme="dark"] #sidepanel-urc-e .URCE-legend.urStyle {
 				background-color: var(--always_dark_surface_default) !important;
 			}
@@ -908,6 +916,7 @@ Version
 			}
 
 			/* Turn, Segment Closures */
+	
 			[wz-theme="dark"] .closure {
 				background: var(--background_default) !important;
 			}
@@ -1055,7 +1064,7 @@ Version
 				background-color: var(--background_default);
 			}
 
-			/* UR List */
+    /************* UR List ********************************/
 			[wz-theme="dark"] .list-item-card-title {
 				color: var(--content_p1) !important;
 			}
@@ -1207,11 +1216,13 @@ Version
 			[wz-theme="dark"] .secondary-toolbar .toolbar-button {
 				background-color: var(--background_default) !important;
 			}
+
 /* Container + table base */
 [wz-theme="dark"] #wecm-time-history-table {
   background: var(--always_dark_background_default);
   border: 1px solid var(--always_dark_inactive) !important;
 }
+
 [wz-theme="dark"] #wecm-time-history-table table {
   background: var(--always_dark_background_default);
   color: white;
@@ -1276,6 +1287,11 @@ Version
 				--wz-button-background-color: var(--always_dark_surface_default);
 			}
 
+	/*Place opening hours delete icon*/
+			[wz-theme="dark"] wz-button.opening-hours-delete {
+				--wz-button-background-color: var(--always_dark_surface_default);
+			}
+
 			/*Lanes and road width*/
 			[wz-theme="dark"] .direction-lanes .lane-instruction .drawing .letter-circle {
 				background-color: var(--background_default) !important;
@@ -1301,7 +1317,7 @@ Version
 				background-color: black !important;
 			}
 
-			/* FUME Plugin */
+	/*********** WME FUME *************************************/
 			[wz-theme="dark"] .yslider-stops,
 			[wz-theme="dark"] .olButton,
 			[wz-theme="dark"] .olControlPanZoomBar,
@@ -1326,7 +1342,7 @@ Version
 				background-color: #3c4043 !important;
 			}
 
-			/* RA Util window */
+	/*RA Util window*/
 			[wz-theme="dark"] #RAUtilWindow,
 			[wz-theme="dark"] #SSUtilWindow {
 				background-color: var(--background_default) !important;
@@ -1338,12 +1354,16 @@ Version
 			}
 
 			/******E50 Geometry information Script ********************************************/
+			[wz-theme="dark"] .wme-ui-modal.e50 li a.nonumber:hover,
 			[wz-theme="dark"] .e50 fieldset legend,
 			[wz-theme="dark"] .e50 li a:hover,
 			[wz-theme="dark"] .e50 li a.noaddress:hover {
 				background-color: var(--always_dark_surface_default) !important;
 			}
 
+			[wz-theme="dark"] .wme-ui-modal,
+			[wz-theme="dark"] .wme-ui-modal-close,
+			[wz-theme="dark"] .wme-ui-modal.e50 li a.nonumber,
 			[wz-theme="dark"] .wme-ui-panel-container,
 			[wz-theme="dark"] .wme-ui-close-panel,
 			[wz-theme="dark"] .e50 li a.noaddress,
@@ -1359,7 +1379,21 @@ Version
 				color: var(--content_p1) !important;
 			}
 
-			/*Address Point Helper*/
+    [wz-theme="dark"] .controls-container.e50 input {
+    color: var(--content_p2) !important;  /*color overrided*/
+    }
+
+/******E85 Street Geometry ********************************************/
+			[wz-theme="dark"] .wme-ui-fieldset-legend {
+				background-color: var(--always_dark_surface_default) !important;
+			}
+
+/******E95  ********************************************/
+			[wz-theme="dark"] .e95 .wme-ui-fieldset-content p {
+				color: var(--content_p2) !important;
+				}
+
+/**********************Address Point Helper*****************************/
 			[wz-theme="dark"] .waze-btn.waze-btn-white {
 				background-color: var(--background_default) !important;
 			}
@@ -1404,7 +1438,7 @@ Version
 				background-color: var(--always_dark_surface_default) !important;
 			}
 
-			/*WME Geometries*/
+/**********************WME Geometries************************************/
 			[wz-theme="dark"] .geometries-cb-label {
 				color: var(--content_p1) !important;
 			}
@@ -1437,7 +1471,7 @@ Version
 				color: var(--content_p1) !important;
 			}
 
-			/*WME Validator*/
+/******************* WME Validator *************************************/
 			[wz-theme="dark"] c2821834349>input:disabled+label,
 			[wz-theme="dark"] .c2821834349>input:disabled+label {
 				color: var(--content_p1) !important;
@@ -1461,12 +1495,12 @@ Version
 				background-color: var(--always_dark_surface_default) !important;
 			}
 
-			/*Re-lock Segments & POI*/
+/***** Re-lock Segments & POI***********************************************/	
 			[wz-theme="dark"] .tg .tg-header {
 				background-color: var(--always_dark_surface_default) !important;
 			}
 
-			/* WME Locksmith */
+/***** WME Locksmith *****************************************************/ 
 			[wz-theme="dark"] .ls-Wrapper {
 				background-color: var(--background_default) !important;
 			}
@@ -1493,7 +1527,7 @@ Version
 				background-color: var(--always_dark_inactive) !important;
 			}
 
-			/*Wide Area Lens*/
+/**** Wide Area Lens ******************************************************/	
 			[wz-theme="dark"] .btn.btn-primary {
 				background-color: var(--always_dark_surface_default) !important;
 			}
@@ -1529,6 +1563,27 @@ Version
 			[wz-theme="dark"] #uroAlerts,
 			[wz-theme="dark"] #content {
 				background-color: var(--background_default) !important;
+			}
+
+/****** Place Interface Enhancement PIE **************************************/
+			[wz-theme="dark"] #divPlaceFilter #piePlaceFilter,
+			[wz-theme="dark"] #divPlaceNamesFontCustomization input {
+			color: var(--content_p1) !important; /* overrided */
+			}
+
+			[wz-theme="dark"] #pieViewEditGeom {
+			background-color: var(--background_default) !important;
+			}
+			[wz-theme="dark"] #pierotate,
+			[wz-theme="dark"] #pieresize {
+			color: var(--content_p1) !important;
+			}
+
+
+/****** Open Other Maps OOM **************************************/
+    [wz-theme="dark"] fieldset #txtOOMLanguage,
+	[wz-theme="dark"] #txtOOMMyMapLink {
+    color: var(--content_p2) !important; /* Overrided */
 			}
 
 			/*********** EVCS Icons *************************************************/
@@ -1695,6 +1750,110 @@ Version
 				background: var(--background_default) !important;
 			}
 
+/*********** WME AD to BS Date Converter *******************************************/	
+			[wz-theme="dark"] .bs-calendar-popup {
+				background: var(--background_default) !important;
+			}
+
+			[wz-theme="dark"] #closure_startDate-bs-val,
+			[wz-theme="dark"] #closure_endDate-bs-val,
+			[wz-theme="dark"] #wmeac-advanced-closure-dialog-rangestartdate-bs-val,
+			[wz-theme="dark"] #wmeac-advanced-closure-dialog-rangeenddate-bs-val {
+				color: var(--content_p1) !important;
+			}
+
+			[wz-theme="dark"] .bs-calendar-popup table td:hover {
+				background: var(--always_dark_inactive) !important;
+			}
+
+			[wz-theme="dark"] .bs-calendar-popup table th {
+				color: var(--content_p1) !important;
+			}
+			/* Targets the Date (First span) */
+			[wz-theme="dark"]  #wme-ad-bs-today span:nth-of-type(1) {
+				color: #ffcc00 !important; /* Example: Gold */
+			}
+
+			/* Targets the Time (Second span) */
+			[wz-theme="dark"] #wme-ad-bs-today span:nth-of-type(2) {
+				color: #00ffcc !important; /* Example: Teal */
+			}
+
+/*********** WME Easy Storage Manager *******************************************/
+			/* Help panel card backgrounds and all descendant divs */
+			[wz-theme="dark"] #esm-dropbox-help-panel div,
+			[wz-theme="dark"] #esm-gdrive-help-panel div {
+				background: var(--background_default) !important;
+				color: var(--content_p1) !important;
+				border-color: var(--hairline) !important;
+			}
+
+			/* Token input field */
+			[wz-theme="dark"] #esm-dropbox-token-input {
+				background: var(--surface_default) !important;
+				color: var(--content_p1) !important;
+				border-color: var(--hairline) !important;
+			}
+
+			/* Status text in help panels */
+			[wz-theme="dark"] #esm-dropbox-token-status,
+			[wz-theme="dark"] #esm-gdrive-status {
+				color: var(--content_p2) !important;
+			}
+
+			/* Hide/show toggle and Google login button (exclude red/green action buttons) */
+			[wz-theme="dark"] #esm-dropbox-help-panel button:not(#esm-dropbox-token-save):not(#esm-dropbox-token-clear),
+			[wz-theme="dark"] #esm-gdrive-help-panel button:not([style*="ef4444"]) {
+				background: var(--surface_default) !important;
+				color: var(--content_p1) !important;
+				border-color: var(--hairline) !important;
+				box-shadow: none !important;
+			}
+
+			/* Auto-save section */
+			[wz-theme="dark"] #esm-autosave-section {
+				background: var(--surface_default) !important;
+				border-color: var(--hairline) !important;
+				color: var(--content_p1) !important;
+			}
+
+			[wz-theme="dark"] #esm-autosave-section label,
+			[wz-theme="dark"] #esm-autosave-section span {
+				color: var(--content_p1) !important;
+			}
+
+			[wz-theme="dark"] #esm-autosave-interval,
+			[wz-theme="dark"] #esm-autosave-target {
+				background: var(--background_default) !important;
+				color: var(--content_p1) !important;
+				border-color: var(--hairline) !important;
+			}
+
+			/* Key list container (import/restore checkboxes) */
+			[wz-theme="dark"] #key-list-container {
+				background: var(--surface_default) !important;
+				color: var(--content_p1) !important;
+				border-color: var(--hairline) !important;
+			}
+
+			[wz-theme="dark"] #key-list-container label {
+				color: var(--content_p1) !important;
+			}
+
+			/* WazeWrap tab text */
+			[wz-theme="dark"] #esm-tab,
+			[wz-theme="dark"] #esm-tab p,
+			[wz-theme="dark"] #esm-title {
+				color: var(--content_p1) !important;
+			}
+
+			/* W.userscripts sidebar tab text */
+			[wz-theme="dark"] #easy-storage-manager-tab p {
+				color: var(--content_p1) !important;
+			}
+
+/*********** WME EV Chargers plug color *******************************************/
+			/* Applied via JS (CSS injected into wz-autocomplete shadow root) - see scheduleEVChargerFilter() */
 
 			`;
 
@@ -1775,7 +1934,7 @@ Version
     let wzMenuItem = userBox?.querySelector('wz-menu-item');
 
     if (!wzMenuItem) {
-      if (profileTries <= maxUIRetries) {
+      if(profileTries <= maxUIRetries) {
         profileTries++;
         profileTimeoutId = setTimeout(() => addProfileToggle(), 1000);
       } else {
@@ -1790,7 +1949,7 @@ Version
       profileTimeoutId = null;
     }
 
-    let darkModeMenuItem = document.createElement('wz-menu-item');
+    let darkModeMenuItem  = document.createElement('wz-menu-item');
 
     darkModeMenuItem.style = 'pointer-events: none; border-bottom: 1px solid var(--separator_default, #e8eaed);';
     darkModeMenuItem.innerHTML = `<wz-toggle-switch style="pointer-events: all;" checked="true" tabindex="0" name="wmeDarkMode" id="wme-dark-mode_switch">Dark Mode<input type="checkbox" name="wmeDarkMode" value="" style="display: none; visibility: hidden;"></wz-toggle-switch>`;
@@ -1805,93 +1964,58 @@ Version
     updateUI();
   }
 
-  function addSettingsToggle() {
-    let settingsDiv = document.querySelector('.settings');
+  // Add a Dark/Light toggle button to the nav bar, directly after the
+  // container element that holds the settings icon.
+  function addNavbarThemeButton() {
+    // Target the settings nav item directly by its known data-for attribute
+    const navItem = document.querySelector('wz-navigation-item[data-for="prefs"]');
 
-    if (!settingsDiv && settingsTries <= maxUIRetries) {
-      settingsTimeoutId = setTimeout(() => addSettingsToggle(), 1000);
-      settingsTries++;
+    if (!navItem) {
+      if (navbarThemeTries <= maxUIRetries) {
+        navbarThemeTries++;
+        navbarThemeTimeoutId = setTimeout(addNavbarThemeButton, 1000);
+      } else {
+        console.log('WME Dark Mode: settings nav item not found.');
+        navbarThemeTries = 0;
+      }
       return;
     }
 
-    if (!settingsDiv) {
-      console.log('Settings div with class "settings" not found.');
-      settingsTries = 0;
-      return;
+    if (navbarThemeTimeoutId) {
+      clearTimeout(navbarThemeTimeoutId);
+      navbarThemeTimeoutId = null;
     }
 
-    // Clear timeout since we found the element
-    if (settingsTimeoutId) {
-      clearTimeout(settingsTimeoutId);
-      settingsTimeoutId = null;
-    }
-
-    const formDiv = settingsDiv.querySelector('.settings__form');
-
-    if (formDiv) {
       // Prevent duplicate injection
-      if (formDiv.querySelector('.theme-select')) return;
+    if (document.getElementById('wme-navbar-theme-btn')) return;
 
-      const newDiv = document.createElement('div');
-      newDiv.classList.add('settings__form-group', 'dark-mode');
+    // Wrap in a flex div so the button centers the same way the nav items do
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display: flex; justify-content: center; align-items: center; padding-top: 12px; padding-bottom: 12px; height: auto;';
 
-      const modeSelectionHTML = `
-                <div class="theme-select">
-                    <wz-label class="themes-select__label" html-for="">
-                        Color Theme
-                    </wz-label>
-                    <wz-button id="button_light_theme" color="primary" size="sm" value="">
-                        Light
-                    </wz-button>
-                    <wz-button id="button_dark_theme" color="secondary" size="sm" value="">
-                        Dark
-                    </wz-button>
-                    <wz-button id="button_auto_theme" color="secondary" size="sm" value="">
-                        Auto (Dark)
-                    </wz-button>
-                </div>
-                `;
+    const btn = document.createElement('wz-button');
+    btn.id    = 'wme-navbar-theme-btn';
+    btn.setAttribute('size', 'sm');
+    btn.setAttribute('color', 'secondary');
 
-      newDiv.innerHTML = modeSelectionHTML;
+    wrapper.appendChild(btn);
+    navItem.insertAdjacentElement('afterend', wrapper);
+    navbarThemeButton = btn;
 
-      formDiv.appendChild(newDiv);
-
-      // Get the wz-button by its ID
-      lightButton = document.getElementById('button_light_theme');
-      darkButton = document.getElementById('button_dark_theme');
-      autoButton = document.getElementById('button_auto_theme');
-
-      lightButton.addEventListener('click', changeToLight);
-      darkButton.addEventListener('click', changeToDark);
-      autoButton.addEventListener('click', changeToAuto);
-
-      // We technically call updateUI() twice since it is called per toggle option,
-      // but repeatedly calling this function is harmless.
-      updateUI();
+    navbarThemeButton.addEventListener('click', () => {
+      if (getPreferredTheme() === 'light') {
+        changeToDark();
     } else {
-      console.log('Form div with class "settings__form" not found.');
-    }
-  }
-
-  // MutationObserver integration for settings UI
-  function observeSettingsUI() {
-    const target = document.body;
-    if (!target) return;
-    if (settingsObserver) return; // Prevent duplicate observers
-    settingsObserver = new MutationObserver(() => {
-      const settingsDiv = document.querySelector('.settings');
-      if (settingsDiv) {
-        addSettingsToggle();
-        // Keep observer running since settings panel is dynamically added/removed
+        changeToLight();
       }
     });
-    settingsObserver.observe(target, { childList: true, subtree: true });
+
+    updateUI();
   }
 
   function addThemeToggleButtons() {
     addProfileToggle();
-    observeSettingsUI();
-    addSettingsToggle();
+    addNavbarThemeButton();
   }
 
   function FUMECheck() {
@@ -1926,6 +2050,7 @@ Version
     // login screen. These two are in iframes and implement
     // dark mode already. We pick it up for free with the
     // switching mechanism.
+
     injectStyle();
   }
 
@@ -1951,7 +2076,8 @@ Version
   if (W?.userscripts?.state.isInitialized) {
     init();
   } else {
-    document.addEventListener('wme-initialized', init(), {
+        document.addEventListener('wme-initialized',
+                                  init(), {
       once: true,
     });
     // Sometimes we load in without W, and we will never get a wme-initialized
@@ -2006,6 +2132,10 @@ Version
                 shadowRoot.appendChild(style);
               }
             }
+
+            // EV Charger plug images: schedule the filter via debounce so we
+            // don't run it on every individual added node.
+            scheduleEVChargerFilter();
           }
         });
       }
@@ -2015,8 +2145,88 @@ Version
   // Start observing the document or a specific container
   mainObserver.observe(document.body, {
     childList: true,
-    subtree: true,
+    subtree: true
   });
+
+// -----------------------------------------for the EV Charger plug image invert filter (shadow DOM) -------------------------------------------
+  // The plug-types-control only exists while the Chargers tab is open on a
+  // charging-station venue.  External CSS cannot cross shadow DOM boundaries,
+  // so we inject a <style> directly into wz-autocomplete's shadow root.
+  const EV_STYLE_ID  = 'wme-ev-charger-img-filter';
+  const EV_STYLE_CSS = '.wz-autocomplete-item img, .autocomplete-sub-menu img { filter: invert(1) !important; }';
+
+  let _evChargerAutocomplete = null; // cached element reference
+  let _evStyleInjected       = false; // true once <style> is in the shadow root
+  let _evLastSearchTime      = 0;    // throttle expensive shadow traversal
+  let _evDebounceTimer       = null; // debounce handle for mainObserver calls
+  const EV_SEARCH_COOLDOWN   = 500; // ms between full shadow-DOM searches
+
+  // Called from mainObserver on every added node – debounced so the real work
+  // only fires once after a burst of mutations settles (typically < 50 ms).
+  function scheduleEVChargerFilter() {
+    // Fast exit: style already injected and element still in the DOM.
+    if (_evStyleInjected && _evChargerAutocomplete && _evChargerAutocomplete.isConnected) return;
+    if (_evDebounceTimer) return;
+    _evDebounceTimer = setTimeout(() => {
+      _evDebounceTimer = null;
+      applyEVChargerImageFilter();
+    }, 150);
+  }
+
+  function getEVChargerShadowRoot() {
+    // Fast path: reuse cached reference while it is still in the DOM
+    if (_evChargerAutocomplete && _evChargerAutocomplete.isConnected) {
+      return _evChargerAutocomplete.shadowRoot;
+    }
+    _evChargerAutocomplete = null;
+    _evStyleInjected       = false; // element gone, reset flag
+
+    // Throttle the expensive recursive search to once per second
+    const now = Date.now();
+    if (now - _evLastSearchTime < EV_SEARCH_COOLDOWN) return null;
+    _evLastSearchTime = now;
+
+    // Try the light-DOM fast path first
+    _evChargerAutocomplete = document.querySelector(
+      '.wz-multiselect.plug-types-control wz-autocomplete'
+    );
+    if (_evChargerAutocomplete) return _evChargerAutocomplete.shadowRoot;
+
+    // Recursively search inside every shadow root on the page
+    function searchShadow(root) {
+      try {
+        const hit = root.querySelector(
+          '.wz-multiselect.plug-types-control wz-autocomplete'
+        );
+        if (hit) return hit;
+        for (const el of root.querySelectorAll('*')) {
+          if (el.shadowRoot) {
+            const result = searchShadow(el.shadowRoot);
+            if (result) return result;
+          }
+        }
+      } catch (e) { /* skip inaccessible shadow roots */ }
+      return null;
+    }
+
+    _evChargerAutocomplete = searchShadow(document);
+    return _evChargerAutocomplete ? _evChargerAutocomplete.shadowRoot : null;
+  }
+
+  function applyEVChargerImageFilter() {
+    if (document.documentElement.getAttribute('wz-theme') !== 'dark') return;
+    const shadowRoot = getEVChargerShadowRoot();
+    if (!shadowRoot) return;
+
+    if (!shadowRoot.getElementById(EV_STYLE_ID)) {
+      const style       = document.createElement('style');
+      style.id          = EV_STYLE_ID;
+      style.textContent = EV_STYLE_CSS;
+      shadowRoot.appendChild(style);
+      _evStyleInjected = true;
+    }
+  }
+// -----------------------------------------for the EV Charger plug image invert filter (shadow DOM) -------------------------------------------
 
   // -----------------------------------------for the clicksaver road type chip border color override in compact mode -------------------------------------------
   // Override road type chip border color from black to red
@@ -2066,9 +2276,8 @@ Version
   window.addEventListener('beforeunload', () => {
     if (mainObserver) mainObserver.disconnect();
     if (chipObserver) chipObserver.disconnect();
-    if (settingsObserver) settingsObserver.disconnect();
     if (profileTimeoutId) clearTimeout(profileTimeoutId);
-    if (settingsTimeoutId) clearTimeout(settingsTimeoutId);
+    if (navbarThemeTimeoutId) clearTimeout(navbarThemeTimeoutId);
     themeAbortController.abort();
   });
 
